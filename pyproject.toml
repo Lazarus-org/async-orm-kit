@@ -84,7 +84,7 @@ test = [
 ]
 quality = [
     "ruff>=0.17.3,<0.18",
-    "mypy>=1.15,<2",
+    "mypy>=1.15,<3",
     "bandit[toml]>=1.8,<2",
     "pre-commit>=4.2,<5",
     "pylint>=3.2,<5",
