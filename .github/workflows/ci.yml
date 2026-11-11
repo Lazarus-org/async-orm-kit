@@ -1,0 +1,256 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Immutable Git commit SHA to validate
+        type: string
+        required: false
+        default: ""
+    secrets:
+      CODECOV_TOKEN:
+        description: Organization Codecov upload token
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: CPython ${{ matrix.python-version }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.11', '3.12', '3.13', '3.14', '3.15']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          version: '0.13.6'
+          enable-cache: true
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - name: Verify locked dependencies
+        run: uv lock --check --offline
+      - name: Install project + SQLite integration dependencies
+        run: uv sync --locked --no-default-groups --extra test --python "${{ matrix.python-version }}"
+      - name: Ensure aiosqlite / Alembic / FastAPI / storage extras are installed
+        run: uv run --no-sync python -c "import aiosqlite, alembic, fastapi, httpx, async_storage_kit; from async_orm_kit import Model; assert Model.metadata is not None"
+      - name: Run entire offline test suite and collect branch coverage
+        run: uv run --no-sync python -m pytest -q --cov=async_orm_kit --cov-branch --cov-report=term-missing --cov-fail-under=0
+      - name: Execute native SQLite advanced QuerySet contract
+        run: >-
+          uv run --no-sync python -m pytest -q
+          tests/integration/test_async_queryset.py
+          tests/integration/test_async_transactions.py
+          tests/integration/test_advanced_correlation_async.py
+          tests/integration/test_advanced_sql_async.py
+          tests/integration/test_stage4_async.py
+          tests/integration/test_advanced_stage7_async.py
+          tests/integration/test_release_regressions.py
+          tests/integration/test_mapped_columns_async.py
+          tests/integration/test_provider_acceptance.py
+          --junitxml=advanced-sqlite-results.xml
+      - name: Fail if any native SQLite advanced test was skipped
+        run: uv run --no-sync python .github/scripts/check_pytest_junit.py advanced-sqlite-results.xml --min-tests 32
+      - name: Execute native AsyncSession observability contract
+        run: uv run --no-sync python -m pytest -q tests/integration/test_observability_async.py --junitxml=observability-results.xml
+      - name: Fail if observability integration was skipped
+        run: uv run --no-sync python .github/scripts/check_pytest_junit.py observability-results.xml --min-tests 4
+
+  postgres:
+    name: PostgreSQL contract and complete coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orm_test
+          POSTGRES_PASSWORD: orm_test
+          POSTGRES_DB: async_orm_kit_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U orm_test -d async_orm_kit_test"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_only_in_disposable_ci
+          MYSQL_DATABASE: async_orm_kit_test
+          MYSQL_USER: orm_test
+          MYSQL_PASSWORD: orm_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u orm_test -porm_test"
+          --health-interval 10s --health-timeout 5s --health-retries 30
+    env:
+      ASYNC_ORM_KIT_MYSQL_URL: mysql+asyncmy://orm_test:orm_test@127.0.0.1:3306/async_orm_kit_test?charset=utf8mb4
+      ASYNC_ORM_KIT_POSTGRES_URL: postgresql+asyncpg://orm_test:orm_test@127.0.0.1:5432/async_orm_kit_test
+      ASYNC_ORM_KIT_ACCEPTANCE_URL: postgresql+asyncpg://orm_test:orm_test@127.0.0.1:5432/async_orm_kit_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --no-default-groups --extra test --extra postgres --extra mysql
+      - name: Execute base and advanced PostgreSQL contracts
+        run: >-
+          uv run --no-sync python -m pytest -q
+          tests/integration/test_postgres_async.py
+          tests/integration/test_advanced_postgres_async.py
+          tests/integration/test_provider_acceptance.py
+          --junitxml=postgres-results.xml
+      - name: Fail if any PostgreSQL tests were skipped
+        run: uv run --no-sync python .github/scripts/check_pytest_junit.py postgres-results.xml --min-tests 16
+
+      - name: Enforce complete statement and branch coverage
+        run: >-
+          uv run --no-sync python -m pytest -q
+          --cov=async_orm_kit --cov-branch --cov-fail-under=100
+          --cov-report=term-missing --cov-report=xml:coverage.xml
+          --junitxml=complete-results.xml
+      - name: Require all provider tests to execute
+        run: uv run --no-sync python .github/scripts/check_pytest_junit.py complete-results.xml --min-tests 600
+      - name: Save complete coverage report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: complete-coverage
+          path: coverage.xml
+          if-no-files-found: error
+      - name: Upload complete main-branch coverage to Codecov
+        if: github.ref == 'refs/heads/main' && inputs.ref == ''
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
+          files: ./coverage.xml
+          disable_search: true
+          fail_ci_if_error: true
+          name: complete-provider-coverage
+
+  mysql:
+    name: MySQL 8.4 asyncmy live contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_only_in_disposable_ci
+          MYSQL_DATABASE: async_orm_kit_test
+          MYSQL_USER: orm_test
+          MYSQL_PASSWORD: orm_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u orm_test -porm_test"
+          --health-interval 10s --health-timeout 5s --health-retries 20
+    env:
+      ASYNC_ORM_KIT_MYSQL_URL: mysql+asyncmy://orm_test:orm_test@127.0.0.1:3306/async_orm_kit_test?charset=utf8mb4
+      ASYNC_ORM_KIT_ACCEPTANCE_URL: mysql+asyncmy://orm_test:orm_test@127.0.0.1:3306/async_orm_kit_test?charset=utf8mb4
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --no-default-groups --extra test --extra mysql
+      - name: Execute base and advanced MySQL contracts
+        run: >-
+          uv run --no-sync python -m pytest -q
+          tests/integration/test_mysql_async.py
+          tests/integration/test_advanced_mysql_async.py
+          tests/integration/test_provider_acceptance.py
+          --junitxml=mysql-results.xml
+      - name: Fail if any MySQL tests were skipped
+        run: uv run --no-sync python .github/scripts/check_pytest_junit.py mysql-results.xml --min-tests 16
+
+  quality:
+    name: Ruff, mypy, Bandit, hooks and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --python 3.13
+      - run: uv run --no-sync ruff check src tests .github/scripts
+      - run: uv run --no-sync ruff format --check src tests .github/scripts
+      - run: uv run --no-sync mypy src/async_orm_kit
+      - run: uv run --no-sync bandit -c pyproject.toml -r src/async_orm_kit
+      - run: uv run --no-sync pre-commit run --all-files
+      - name: Audit locked runtime dependencies
+        run: |
+          uv export --locked --no-default-groups --no-emit-project --no-hashes --format requirements-txt --output-file runtime-requirements.txt
+          uv run --no-sync pip-audit --strict --disable-pip --no-deps -r runtime-requirements.txt
+          uv export --locked --no-default-groups --no-emit-project --no-hashes --extra sqlite --extra postgres --extra mysql --extra storage --extra migrations --extra fastapi --format requirements-txt --output-file optional-runtime-requirements.txt
+          uv run --no-sync pip-audit --strict --disable-pip --no-deps -r optional-runtime-requirements.txt
+
+  docs:
+    name: Build Sphinx RST documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --no-default-groups --extra docs
+      - run: uv run --no-sync sphinx-build -b html -W --keep-going docs docs/_build/html
+
+  distribution:
+    name: Build and validate distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --python 3.13
+      - run: uv build --no-sources
+      - run: uv run --no-sync python -m twine check --strict dist/*
+      - run: uv run --no-sync python .github/scripts/validate_distribution.py dist --test-sdist

@@ -37,6 +37,13 @@ classifiers = [
 ]
 dependencies = ["SQLAlchemy[asyncio]>=2.0.40,<3.0"]
 
+[project.urls]
+Homepage = "https://github.com/Lazarus-org/async-orm-kit"
+Repository = "https://github.com/Lazarus-org/async-orm-kit"
+Documentation = "https://github.com/Lazarus-org/async-orm-kit/blob/main/docs/index.rst"
+Issues = "https://github.com/Lazarus-org/async-orm-kit/issues"
+Changelog = "https://github.com/Lazarus-org/async-orm-kit/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 sqlite = ["aiosqlite>=0.20,<1"]
 postgres = ["asyncpg>=0.29,<1"]

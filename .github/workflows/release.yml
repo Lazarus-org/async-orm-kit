@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable stable tag (for example v1.0.0)
+        type: string
+        required: true
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve tag and verify immutable release commit
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check tag, version, ancestry and push event identity
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+          PUSH_SHA: ${{ github.event_name == 'push' && github.sha || '' }}
+        run: |
+          git fetch --no-tags origin main
+          python .github/scripts/resolve_release.py --tag "$RELEASE_TAG" --push-sha "$PUSH_SHA"
+
+  test-release:
+    name: Full compatibility, quality and live-provider validation
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  verify-and-build:
+    name: Validate immutable tag and build release artifacts
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject tag movement before building
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+        run: python .github/scripts/resolve_release.py --tag "$RELEASE_TAG" --verify-commit "$RELEASE_SHA"
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.13'
+      - run: uv sync --locked --python 3.13
+      - name: Build and check approved stable-release candidate
+        run: |
+          uv build --no-sources
+          uv run --no-sync python -m twine check --strict dist/*
+          uv run --no-sync python .github/scripts/validate_distribution.py dist --test-sdist --test-extras --release
+          cd dist
+          sha256sum *.whl *.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: release-distributions-${{ needs.resolve.outputs.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish verified artifacts to PyPI
+    if: vars.PYPI_PUBLISH_ENABLED == 'true'
+    needs: [resolve, verify-and-build, test-release]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/async-orm-kit/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: release-distributions-${{ needs.resolve.outputs.sha }}
+          path: dist
+      - name: Verify exact checked artifact contents
+        run: cd dist && sha256sum --check SHA256SUMS
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: '0.13.6'
+          enable-cache: false
+      - name: Publish with Trusted Publishing
+        run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz

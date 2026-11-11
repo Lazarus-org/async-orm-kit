@@ -1,0 +1,47 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        exclude: ^uv\.lock$
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        exclude: ^(CODE_OF_CONDUCT\.md|CONTRIBUTING\.md)$
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: Ruff lint
+        entry: uv run --locked ruff check src tests .github/scripts
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: Ruff format
+        entry: uv run --locked ruff format --check src tests .github/scripts
+        language: system
+        pass_filenames: false
+      - id: mypy
+        name: Mypy typing
+        entry: uv run --locked mypy src/async_orm_kit
+        language: system
+        pass_filenames: false
+      - id: bandit
+        name: Bandit security
+        entry: uv run --locked bandit -c pyproject.toml -r src/async_orm_kit
+        language: system
+        pass_filenames: false
+      - id: pytest
+        name: Offline test suite
+        entry: uv run --locked python -m pytest -q -m "not live_postgres and not live_mysql"
+        language: system
+        pass_filenames: false
+        stages: [manual]
+      - id: conventional-commit
+        name: Validate commit message
+        entry: uv run --locked cz check --commit-msg-file
+        language: system
+        pass_filenames: true
+        stages: [commit-msg]
