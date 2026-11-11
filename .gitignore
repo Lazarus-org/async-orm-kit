@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and build output
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Local databases and secrets
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Documentation output
+site/
+docs/_build/
+
+# Tooling and local test reports
+.pytest_tmp/
+*.xml
+
+# Isolated release validation
+.release-venv/
+.validation/

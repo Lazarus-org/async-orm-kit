@@ -1,0 +1,205 @@
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14"]
+build-backend = "uv_build"
+
+[project]
+name = "async-orm-kit"
+version = "1.0.0"
+description = "Async-first Django-inspired QuerySets and relationship-aware query planning for SQLAlchemy"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.16"
+authors = [
+    { name = "Aryan Niknezhad", email = "aryan513966@gmail.com" },
+    { name = "Mehrshad Mirshekary", email = "mehrshad_mirshekary@email.com" },
+]
+keywords = [
+    "async", "asyncio", "database", "django-inspired", "orm", "queryset",
+    "sqlalchemy", "query-planner", "postgresql", "mysql",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = ["SQLAlchemy[asyncio]>=2.0.40,<3.0"]
+
+[project.optional-dependencies]
+sqlite = ["aiosqlite>=0.20,<1"]
+postgres = ["asyncpg>=0.29,<1"]
+mysql = [
+    "asyncmy>=0.2,<1",
+    "cryptography>=44",
+]
+storage = ["async-storage-kit>=1.0.0,<2.0.0"]
+migrations = ["alembic>=1.13,<2.0"]
+fastapi = ["fastapi>=0.110,<1.0"]
+docs = ["sphinx>=8.2,<9", "sphinx-rtd-theme>=3.0,<4"]
+test = [
+    "pytest>=8.3,<10",
+    "pytest-asyncio>=0.24,<2",
+    "pytest-cov>=6,<8",
+    "aiosqlite>=0.20,<1",
+    "async-storage-kit>=1.0.0,<2.0.0",
+    "alembic>=1.13,<2.0",
+    "fastapi>=0.110,<1.0",
+    "httpx>=0.27,<1",
+]
+
+[dependency-groups]
+dev = [
+    { include-group = "test" },
+    { include-group = "quality" },
+    { include-group = "build" },
+]
+test = [
+    "pytest>=8.3,<10",
+    "pytest-asyncio>=0.24,<2",
+    "pytest-cov>=6,<8",
+    "aiosqlite>=0.20,<1",
+    "alembic>=1.13,<2.0",
+    "fastapi>=0.110,<1.0",
+    "httpx>=0.27,<1",
+    "async-storage-kit>=1.0.0,<2.0.0",
+]
+quality = [
+    "ruff>=0.17.3,<0.18",
+    "mypy>=1.15,<2",
+    "bandit[toml]>=1.8,<2",
+    "pre-commit>=4.2,<5",
+    "pylint>=3.2,<5",
+    "pip-audit>=2.9,<3",
+]
+build = [
+    "tox>=4.25,<5",
+    "tox-uv>=1.16,<2",
+    "uv>=0.13.6,<0.14",
+    "twine>=6,<8",
+    "build>=1.2,<2",
+    "packaging>=25,<27",
+    "commitizen>=4,<5",
+]
+
+[tool.uv]
+required-version = ">=0.13.6,<0.14"
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "async_orm_kit"
+module-root = "src"
+source-include = [
+    "tests/**",
+    "docs/**",
+    "LICENSE",
+    "AUTHORS.md",
+    "CONTRIBUTORS.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "tox.ini",
+    ".readthedocs.yaml",
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".python-version",
+    ".pre-commit-config.yaml",
+    ".github/scripts/**",
+    ".github/workflows/**",
+    ".github/dependabot.yml",
+    "uv.lock",
+]
+source-exclude = [
+    "docs/_build/**", "__pycache__", "*.pyc", "*.pyo", ".pytest_cache", ".mypy_cache",
+    ".ruff_cache", ".tox", ".venv", "dist", "build", "*.egg-info",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "tests.py"]
+addopts = "-ra"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "error::DeprecationWarning:async_orm_kit.*",
+    "error::PendingDeprecationWarning:async_orm_kit.*",
+]
+markers = [
+    "live_postgres: tests requiring an externally provisioned disposable PostgreSQL server",
+    "live_mysql: tests requiring an externally provisioned disposable MySQL server",
+    "integration: optional integration or database contract tests",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["build", "dist", ".tox", ".venv", "docs/architecture"]
+
+[tool.ruff.lint]
+# Useful rules from the supplied linting reference, with Ruff owning both
+# formatting and import sorting (instead of also running Black and isort).
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+ignore = ["B008"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["async_orm_kit"]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+explicit_package_bases = true
+mypy_path = "src"
+exclude = ["^build/", "^dist/", "^docs/", "^tests/"]
+# Enabling disallow_untyped_defs/calls is a subsequent code-wide typing
+# migration, not a metadata-only change: existing ORM internals are untyped.
+
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist", ".venv", ".tox"]
+
+[tool.pylint.main]
+ignore = ["tests", "build", "dist", ".venv", ".tox"]
+load-plugins = ["pylint.extensions.docparams"]
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.coverage.run]
+branch = true
+source = ["async_orm_kit"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+fail_under = 100
+precision = 2
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "1.0.0"
+version_files = ["pyproject.toml:version", "src/async_orm_kit/_version.py:__version__"]
+tag_format = "v$version"
+update_changelog_on_bump = false
+
+# Do not enable semantic-release in addition to Commitizen: two independent
+# version/tag publishers would create competing release authorities.
