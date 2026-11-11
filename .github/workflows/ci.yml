@@ -44,7 +44,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
       - name: Verify locked dependencies
-        run: uv lock --check --offline
+        run: uv lock --check --offline --python "${{ matrix.python-version }}"
       - name: Install project + SQLite integration dependencies
         run: uv sync --locked --no-default-groups --extra test --python "${{ matrix.python-version }}"
       - name: Ensure aiosqlite / Alembic / FastAPI / storage extras are installed
