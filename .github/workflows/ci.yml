@@ -251,6 +251,6 @@ jobs:
         with:
           python-version: '3.13'
       - run: uv sync --locked --python 3.13
-      - run: uv build --no-sources
+      - run: uv run --no-sync uv build --no-sources
       - run: uv run --no-sync python -m twine check --strict dist/*
       - run: uv run --no-sync python .github/scripts/validate_distribution.py dist --test-sdist

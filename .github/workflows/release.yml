@@ -71,7 +71,7 @@ jobs:
       - run: uv sync --locked --python 3.13
       - name: Build and check approved stable-release candidate
         run: |
-          uv build --no-sources
+          uv run --no-sync uv build --no-sources
           uv run --no-sync python -m twine check --strict dist/*
           uv run --no-sync python .github/scripts/validate_distribution.py dist --test-sdist --test-extras --release
           cd dist
