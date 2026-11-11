@@ -1,1 +1,3 @@
-"""Validated field primitives for SQLAlchemy models."""
+from .base import Model
+
+__all__ = ["Model"]
