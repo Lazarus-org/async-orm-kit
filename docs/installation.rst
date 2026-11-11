@@ -4,8 +4,8 @@ Installation and requirements
 Runtime requirements
 --------------------
 
-* CPython **3.11–3.15**, as declared in the package metadata. The full version
-  matrix has not yet been verified in hosted CI.
+* CPython **3.11–3.15**, as declared in the package metadata and validated
+  in hosted CI on Linux, Windows, and macOS.
 * ``SQLAlchemy[asyncio]>=2.0.40,<3.0``.
 * An asynchronous driver suitable for your SQLAlchemy database URL.
 

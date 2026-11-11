@@ -1,10 +1,15 @@
 Compatibility and validation status
 ===================================
 
-The package declares CPython 3.11 through 3.15 and SQLAlchemy 2.x support.
-The 2026-11-10 release audit executed the full offline suite on Windows with
-CPython 3.11.18, 3.12.16, 3.13.18, 3.14.10, and 3.15.1. Linux and macOS
-hosted Python matrix results remain a release acceptance requirement.
+The package supports CPython 3.11 through 3.15 and SQLAlchemy 2.x.
+Hosted CI validates all 15 combinations of these Python versions with Ubuntu,
+Windows, and macOS. The complete validation also covers native PostgreSQL and
+MySQL, strict documentation builds, quality checks, distributions, and the
+100% statement and branch coverage gate.
+
+See the `successful hosted validation run
+<https://github.com/Lazarus-org/async-orm-kit/actions/runs/43039484713>`_
+for the recorded evidence. Every release must pass CI again on its own commit.
 
 Native database evidence
 -------------------------

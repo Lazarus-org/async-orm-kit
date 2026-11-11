@@ -67,7 +67,7 @@ Build and distribution
 
 .. code-block:: console
 
-   uv build
+   uv run --no-sync uv build
    uv run twine check dist/*
 
 Also run the repository's distribution validation script and inspect wheel
