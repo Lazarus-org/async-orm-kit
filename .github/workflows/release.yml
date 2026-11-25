@@ -62,7 +62,7 @@ jobs:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
           RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
         run: python .github/scripts/resolve_release.py --tag "$RELEASE_TAG" --verify-commit "$RELEASE_SHA"
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
           version: '0.13.6'
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -101,7 +101,7 @@ jobs:
           path: dist
       - name: Verify exact checked artifact contents
         run: cd dist && sha256sum --check SHA256SUMS
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d
         with:
           version: '0.13.6'
           enable-cache: false
